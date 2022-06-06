@@ -1,0 +1,25 @@
+version: "3.9"
+services:
+  # ftx-bot:
+  #   build: .
+  #   ports:
+  #     - 3000:3000
+  #   environment:
+  #     DB_USER: postgres
+  #     DB_PWD: postgres
+  #     DB_NAME: postgres
+  #     DB_PORT: 5432
+  #     DB_HOST: localhost
+  db:
+    image: postgres:14-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - '5432:5432'
+    volumes: 
+      - db:/var/lib/postgresql/data
+
+volumes:
+  db:

@@ -26,7 +26,11 @@ var (
 )
 
 func main() {
-	db := database.ConnectDb(DB_HOST, DB_PORT, DB_USER, DB_PWD, DB_NAME)
+	db, err := database.ConnectDb(DB_HOST, DB_PORT, DB_USER, DB_PWD, DB_NAME)
+	if err != nil {
+		log.Fatalf("Failed to connect to db: %v", err)
+	}
+
 	bs, err := bot.Start(db, BOT_FREQUENCY, BOT_MARKETS)
 	if err != nil {
 		log.Fatalf("Failed to start bot: %v", err)
@@ -35,19 +39,19 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	// API Server
-	go func(wg *sync.WaitGroup) {
-		defer wg.Done()
-
-		server.Start(db)
-	}(&wg)
-	runtime.Gosched()
-
 	// Bot main loop
 	go func(wg *sync.WaitGroup) {
 		defer wg.Done()
 
 		bs.MainLoop()
+	}(&wg)
+	runtime.Gosched()
+
+	// API Server
+	go func(wg *sync.WaitGroup) {
+		defer wg.Done()
+
+		server.Start(db, bs)
 	}(&wg)
 	runtime.Gosched()
 

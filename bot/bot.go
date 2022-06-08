@@ -7,7 +7,9 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -16,52 +18,82 @@ import (
 const FTX_API_URL = "https://ftx.com/api"
 
 type BotService struct {
+	Mu         sync.Mutex
 	db         *gorm.DB
-	markets    []string
-	frequency  time.Duration
+	Markets    []string
+	Frequency  time.Duration
 	loopsCount uint
 }
 
-func Start(db *gorm.DB, botFrequency int, MARKTES string) (BotService, error) {
+func Start(db *gorm.DB, botFrequency int, MARKTES string) (*BotService, error) {
 	bs := BotService{
 		db:         db,
-		markets:    strings.Split(MARKTES, ","),
-		frequency:  time.Duration(botFrequency) * time.Second,
+		Markets:    strings.Split(MARKTES, ","),
+		Frequency:  time.Duration(botFrequency) * time.Second,
 		loopsCount: 0,
 	}
 
 	// Check the existence of markets
-	for _, market := range bs.markets {
+	for _, market := range bs.Markets {
 		ok, err := bs.CheckMarketExistance(market)
 		if err != nil {
-			return BotService{}, err
+			return &BotService{}, err
 		}
 		if !ok {
-			return BotService{}, fmt.Errorf("Market: '%v' does not exist!", market)
+			return &BotService{}, fmt.Errorf("Market: '%v' does not exist!", market)
 		}
 	}
 
-	log.Println("Bot started")
-	return bs, nil
+	log.Println("🤖 Bot started")
+	log.Printf("🤖 Bot - Bot frequency is set at %v\n", bs.Frequency)
+	log.Printf("🤖 Bot - The markets that will be fetched are: %v\n", bs.Markets)
+	return &bs, nil
+}
+
+type MarketTradingVolumeContainer struct {
+	mu   sync.Mutex
+	list []models.MarketTradingVolume
 }
 
 func (bs *BotService) MainLoop() {
 	for {
+		// marketTradingVolumeListCh := make(chan []models.MarketTradingVolume)
+		var marketTradingVolumeContainer MarketTradingVolumeContainer
+
 		bs.loopsCount += 1
-		log.Printf("Bot - Starting loop n%v\n", bs.loopsCount)
-		for _, market := range bs.markets {
-			log.Printf("Bot - getting market 24h trading volume for '%v'\n", market)
+		log.Printf("🤖 Bot - Loop n%v\n", bs.loopsCount)
 
-			// do a go routine here
-			change24h, err := bs.GetMarket24hTradingVolume(market)
-			log.Printf("change24h -> %v\n", change24h)
-			if err != nil {
-				log.Printf("Bot - error getting trading volume from '%v'\n", market)
-			}
-			//insert shit in database here
+		var wg sync.WaitGroup
+		wg.Add(len(bs.Markets))
+		for _, market := range bs.Markets {
+			log.Printf("🤖 Bot - getting market 24h trading volume for '%v'\n", market)
+
+			//launch each request for the different markets in a goroutine
+			go func(market string) {
+				defer wg.Done()
+				// defer close(marketTradingVolumeListCh)
+
+				change24h, err := bs.GetMarket24hTradingVolume(market)
+				if err != nil {
+					log.Printf("🤖 Bot - error getting trading volume from '%v' because of: %v\n", market, err)
+				}
+
+				marketTradingVolumeContainer.mu.Lock()
+				defer marketTradingVolumeContainer.mu.Unlock()
+				marketTradingVolumeContainer.list = append(
+					marketTradingVolumeContainer.list,
+					models.MarketTradingVolume{
+						MarketName: market,
+						Change24h:  change24h,
+					},
+				)
+			}(market)
+			runtime.Gosched()
 		}
+		wg.Wait()
 
-		time.Sleep(bs.frequency)
+		bs.db.Create(&marketTradingVolumeContainer.list)
+		time.Sleep(bs.Frequency)
 	}
 }
 

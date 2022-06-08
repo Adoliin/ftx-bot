@@ -4,6 +4,6 @@ import "gorm.io/gorm"
 
 type MarketTradingVolume struct {
 	gorm.Model
-	Name      string `json:"name"`
-	Change24h string `json:"change24h"`
+	MarketName string  `json:"market_name"`
+	Change24h  float64 `json:"change24h"`
 }

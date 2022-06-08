@@ -1,15 +1,5 @@
 version: "3.9"
 services:
-  # ftx-bot:
-  #   build: .
-  #   ports:
-  #     - 3000:3000
-  #   environment:
-  #     DB_USER: postgres
-  #     DB_PWD: postgres
-  #     DB_NAME: postgres
-  #     DB_PORT: 5432
-  #     DB_HOST: localhost
   db:
     image: postgres:14-alpine
     restart: always
@@ -20,6 +10,20 @@ services:
       - '5432:5432'
     volumes: 
       - db:/var/lib/postgresql/data
+  ftx-bot:
+    depends_on:
+    - db
+    build: .
+    ports:
+      - 3000:3000
+    environment:
+      BOT_MARKETS: AAPL-0624,AAVE-PERP,AGLD-PERP
+      BOT_FREQUENCY: 15
+      DB_USER: postgres
+      DB_PWD: postgres
+      DB_NAME: postgres
+      DB_PORT: 5432
+      DB_HOST: db
 
 volumes:
   db:

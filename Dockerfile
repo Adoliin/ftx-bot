@@ -1,4 +1,4 @@
-FROM golang:alpine
+FROM golang:alpine as builder
 COPY . /tmp/app
 WORKDIR /tmp/app
 RUN go mod download
@@ -9,7 +9,7 @@ RUN go build -o ftx-bot /tmp/app/main.go
 FROM alpine
 
 RUN mkdir /app
-COPY --from=0 /tmp/app/ftx-bot /app/ftx-bot
+COPY --from=builder /tmp/app/ftx-bot /app/ftx-bot
 
 WORKDIR /app
 EXPOSE 3000
